@@ -6,6 +6,7 @@ from mcp.server.fastapi import MCPFastAPI
 from mcp.types import ToolResponse
 from aws.resolver import resolve_dataset
 from aws.athena import AthenaClient
+from tools.lineage import DATA_FLOWS
 
 # -------------------------------------------------
 # FastAPI + MCP bootstrap
@@ -165,6 +166,39 @@ def get_pipeline_status(dataset: str, limit: int = 5) -> ToolResponse:
             "current_status": dataset_status[0] if dataset_status else None,
         }
     )
+
+@mcp.tool()
+def explain_data_flow(dataset: str) -> ToolResponse:
+    """
+    Explain how data flows through the platform for a given dataset.
+
+    Parameters:
+    - dataset: dataset name (e.g. silver_order_created, gold_daily_order_metrics)
+
+    This tool is read-only and reasoning-only.
+    """
+    # Normalize dataset name to flow key
+    if dataset.startswith("bronze_") or dataset.startswith("silver_") or dataset.startswith("gold_"):
+        flow_key = "order_created"
+    else:
+        return ToolResponse(
+            content={"error": f"No data flow registered for dataset '{dataset}'"}
+        )
+
+    flow = DATA_FLOWS.get(flow_key)
+
+    if not flow:
+        return ToolResponse(
+            content={"error": f"No data flow found for '{dataset}'"}
+        )
+
+    return ToolResponse(
+        content={
+            "dataset": dataset,
+            "flow": flow
+        }
+    )
+
 # -------------------------------------------------
 # Health check (non-MCP, for ops)
 # -------------------------------------------------
