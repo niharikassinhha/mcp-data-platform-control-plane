@@ -5,6 +5,7 @@ from aws.config import GLUE_DATABASES_BY_LAYER
 from mcp.server.fastapi import MCPFastAPI
 from mcp.types import ToolResponse
 from aws.resolver import resolve_dataset
+from aws.athena import AthenaClient
 
 # -------------------------------------------------
 # FastAPI + MCP bootstrap
@@ -106,7 +107,64 @@ def get_dataset_schema(dataset: str) -> ToolResponse:
         }
     )
 
+@mcp.tool()
+def get_pipeline_status(dataset: str, limit: int = 5) -> ToolResponse:
+    """
+    Return recent pipeline execution status and dataset health.
 
+    Parameters:
+    - dataset: dataset name (e.g. silver_order_created)
+    - limit: number of recent job runs to return
+
+    Read-only. Safe.
+    """
+    athena = AthenaClient()
+
+    try:
+        job_runs = athena.run_query(
+            query=f"""
+                SELECT
+                    job_name,
+                    job_type,
+                    status,
+                    start_time,
+                    end_time,
+                    records_processed,
+                    error_message
+                FROM monitoring.job_runs
+                WHERE dataset = '{dataset}'
+                ORDER BY start_time DESC
+                LIMIT {limit}
+            """,
+            database="monitoring",
+        )
+
+        dataset_status = athena.run_query(
+            query=f"""
+                SELECT
+                    dataset,
+                    layer,
+                    last_success_time,
+                    last_record_count,
+                    freshness_minutes
+                FROM monitoring.dataset_status
+                WHERE dataset = '{dataset}'
+            """,
+            database="monitoring",
+        )
+
+    except Exception as e:
+        return ToolResponse(
+            content={"error": f"Failed to fetch pipeline status: {str(e)}"}
+        )
+
+    return ToolResponse(
+        content={
+            "dataset": dataset,
+            "recent_runs": job_runs,
+            "current_status": dataset_status[0] if dataset_status else None,
+        }
+    )
 # -------------------------------------------------
 # Health check (non-MCP, for ops)
 # -------------------------------------------------
