@@ -4,7 +4,7 @@ from aws.glue import GlueCatalogClient
 from aws.config import GLUE_DATABASES_BY_LAYER
 from mcp.server.fastapi import MCPFastAPI
 from mcp.types import ToolResponse
-
+from aws.resolver import resolve_dataset
 
 # -------------------------------------------------
 # FastAPI + MCP bootstrap
@@ -71,6 +71,41 @@ def list_datasets(layer: Optional[str] = None) -> ToolResponse:
             "count": len(datasets),
         }
     )
+
+@mcp.tool()
+def get_dataset_schema(dataset: str) -> ToolResponse:
+    """
+    Return schema and partitioning information for a dataset.
+
+    Parameters:
+    - dataset: Dataset name (e.g. silver_order_created or silver.silver_order_created)
+
+    This tool is read-only and uses metadata only.
+    """
+    glue = GlueCatalogClient()
+
+    try:
+        database, table = resolve_dataset(dataset)
+    except ValueError as e:
+        return ToolResponse(content={"error": str(e)})
+
+    try:
+        table_info = glue.get_table(database, table)
+    except Exception as e:
+        return ToolResponse(
+            content={"error": f"Failed to fetch schema: {str(e)}"}
+        )
+
+    return ToolResponse(
+        content={
+            "dataset": f"{database}.{table}",
+            "columns": table_info["columns"],
+            "partitions": table_info["partitions"],
+            "table_type": table_info["table_type"],
+            "table_properties": table_info["parameters"],
+        }
+    )
+
 
 # -------------------------------------------------
 # Health check (non-MCP, for ops)

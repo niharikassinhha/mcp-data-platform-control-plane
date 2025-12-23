@@ -33,3 +33,28 @@ class GlueCatalogClient:
                 })
 
         return tables
+
+    def get_table(self, database: str, table_name: str) -> Dict:
+        response = self.client.get_table(
+            DatabaseName=database,
+            Name=table_name
+        )
+        table = response["Table"]
+
+        columns = table["StorageDescriptor"]["Columns"]
+        partition_keys = table.get("PartitionKeys", [])
+
+        return {
+            "database": database,
+            "table": table_name,
+            "columns": [
+                {"name": c["Name"], "type": c["Type"]}
+                for c in columns
+            ],
+            "partitions": [
+                {"name": p["Name"], "type": p["Type"]}
+                for p in partition_keys
+            ],
+            "table_type": table.get("TableType"),
+            "parameters": table.get("Parameters", {}),
+        }
