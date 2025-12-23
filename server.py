@@ -7,7 +7,7 @@ from mcp.types import ToolResponse
 from aws.resolver import resolve_dataset
 from aws.athena import AthenaClient
 from tools.lineage import DATA_FLOWS
-
+from tools.replay_plans import build_replay_plan
 # -------------------------------------------------
 # FastAPI + MCP bootstrap
 # -------------------------------------------------
@@ -198,7 +198,38 @@ def explain_data_flow(dataset: str) -> ToolResponse:
             "flow": flow
         }
     )
+@mcp.tool()
+def propose_replay_plan(
+    dataset: str,
+    start_date: str,
+    end_date: str
+) -> ToolResponse:
+    """
+    Propose a dry-run replay plan for correcting data.
 
+    Parameters:
+    - dataset: dataset name (e.g. silver_order_created)
+    - start_date: YYYY-MM-DD
+    - end_date: YYYY-MM-DD
+
+    This tool does NOT execute anything.
+    """
+    try:
+        plan = build_replay_plan(
+            dataset=dataset,
+            start_date=start_date,
+            end_date=end_date
+        )
+    except ValueError as e:
+        return ToolResponse(content={"error": str(e)})
+
+    return ToolResponse(
+        content={
+            "replay_plan": plan,
+            "requires_approval": True,
+            "execution_disabled": True
+        }
+    )
 # -------------------------------------------------
 # Health check (non-MCP, for ops)
 # -------------------------------------------------
