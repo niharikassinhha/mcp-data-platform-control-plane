@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from typing import Optional, List
-
+from aws.glue import GlueCatalogClient
+from aws.config import GLUE_DATABASES_BY_LAYER
 from mcp.server.fastapi import MCPFastAPI
 from mcp.types import ToolResponse
 
@@ -26,44 +27,50 @@ mcp = MCPFastAPI(
 
 
 # -------------------------------------------------
-# Mock data source (will be replaced by AWS calls)
-# -------------------------------------------------
-
-DATASETS = [
-    {"name": "bronze_order_created", "layer": "bronze"},
-    {"name": "silver_order_created", "layer": "silver"},
-    {"name": "gold_daily_order_metrics", "layer": "gold"},
-]
-
-
-# -------------------------------------------------
 # MCP Tools (Read-only, safe)
 # -------------------------------------------------
 
 @mcp.tool()
 def list_datasets(layer: Optional[str] = None) -> ToolResponse:
     """
-    List available datasets in the data platform.
+    List available datasets in the data platform using AWS Glue Catalog.
 
     Parameters:
     - layer: Optional filter (bronze, silver, gold)
 
     This tool is read-only and safe.
     """
+    glue = GlueCatalogClient()
+
+    datasets = []
+
     if layer:
-        filtered = [
-            d["name"] for d in DATASETS if d["layer"] == layer.lower()
-        ]
+        layer = layer.lower()
+        if layer not in GLUE_DATABASES_BY_LAYER:
+            return ToolResponse(
+                content={"error": f"Unknown layer '{layer}'"}
+            )
+
+        db = GLUE_DATABASES_BY_LAYER[layer]
+        tables = glue.list_tables(db)
+
+        datasets = [t["name"] for t in tables]
+
     else:
-        filtered = [d["name"] for d in DATASETS]
+        for layer_name, db in GLUE_DATABASES_BY_LAYER.items():
+            tables = glue.list_tables(db)
+            for t in tables:
+                datasets.append({
+                    "dataset": t["name"],
+                    "layer": layer_name,
+                })
 
     return ToolResponse(
         content={
-            "datasets": filtered,
-            "count": len(filtered),
+            "datasets": datasets,
+            "count": len(datasets),
         }
     )
-
 
 # -------------------------------------------------
 # Health check (non-MCP, for ops)
