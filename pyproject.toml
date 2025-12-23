@@ -1,0 +1,27 @@
+[project]
+name = "mcp-data-platform-control-plane"
+version = "0.1.0"
+description = "MCP-based control plane for operating a data platform"
+requires-python = ">=3.10"
+
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "boto3>=1.34",
+    "pydantic>=2.6",
+    "httpx>=0.27",
+    "mcp>=0.1.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff",
+    "black",
+    "pytest"
+]
+
+[tool.black]
+line-length = 100
+
+[tool.ruff]
+line-length = 100
